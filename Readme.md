@@ -68,7 +68,6 @@ Issues and PRs are welcome. Please ensure any new features do not require a buil
 
 > **Note on Forking:** This project uses a custom MIT license that requires UI Attribution. If you fork and host this tool, you must keep the "Powered by Latrel" link visible in the user interface.
 
-
 ## License
 
 MIT (with UI Attribution Requirement) © 2026 [Latrel.ai](https://latrel.ai)
