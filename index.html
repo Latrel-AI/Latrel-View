@@ -1,0 +1,1181 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  
+  <title>LATREL View - Privacy-First Architecture Visualizer</title>
+  <meta name="description" content="A 100% private, browser-based open-source architecture visualizer. Transform JSON into infrastructure diagrams with zero data leaving your machine.">
+  
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.26.0/cytoscape.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/cytoscape-dagre@2.5.0/cytoscape-dagre.min.js"></script>
+  <script src="https://unpkg.com/klayjs@0.4.1/klay.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/cytoscape-klay@3.1.4/cytoscape-klay.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/elkjs@0.8.2/lib/elk.bundled.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/cytoscape-elk@2.2.0/dist/cytoscape-elk.min.js"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <script src="https://cdn.jsdelivr.net/npm/cytoscape-svg@0.4.0/cytoscape-svg.min.js"></script>
+  
+  <style>
+    /* Global Variables - Premium Bright Palette */
+    :root {
+      --bg: #ffffff;         
+      --topbar-bg:#f5f5f5;  
+      --panel: #f5f5f5;      
+      
+      --text: #334155;
+      --text-muted: #64748b;
+      --text-faint: #94a3b8;
+      
+      --border: #e2e8f0;     
+      --divider: #e2e8f0;
+      
+      --primary: #475569;       
+      --primary-hover: #334155;
+      --primary-hi: #e2e8f0;
+      
+      --btn-bg: #ffffff;
+      --btn-hover: #f8fafc;
+      --grid-dot: rgba(100, 116, 139, 0.15); 
+      
+      /* Cytoscape specific colors */
+      --cy-node-bg: #ffffff;
+      --cy-parent-bg: rgba(225, 231, 240, 0.4);
+      --cy-parent-border: #cbd5e1;
+      --cy-db-bg: #ffffff;
+      --cy-db-border: #94a3b8;
+      --cy-edge: #94a3b8;
+      
+      --shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+      --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.06);
+      --radius: 8px;
+      --radius-sm: 6px;
+      --radius-lg: 12px;
+      --mono: 'Courier New', Courier, monospace;
+      --font: 'Inter', system-ui, sans-serif;
+      --transition: 180ms cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    [data-theme="dark"] {
+      --bg: #111827; 
+      --topbar-bg:#0b1120;
+      --panel:#0b1120;
+      
+      --text: #f8fafc;
+      --text-muted: #94a3b8; 
+      --text-faint: #64748b;
+      --border: #1f2937;
+      --divider: #1f2937;
+      
+      --primary: #94a3b8; 
+      --primary-hover: #cbd5e1;
+      --primary-hi: #374151;
+      
+      --btn-bg: #111827;
+      --btn-hover: #1f2937;
+      --grid-dot: rgba(148, 163, 184, 0.1);
+      
+      --cy-node-bg: #1f2937;
+      --cy-parent-bg: rgba(15, 23, 42, 0.4);
+      --cy-parent-border: #374151;
+      --cy-db-bg: #1f2937;
+      --cy-db-border: #475569;
+      --cy-edge: #64748b;
+      
+      --shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+      --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+    }
+
+    /* Base Layout */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      font-family: var(--font); font-size: 15px; line-height: 1.5;
+      background: var(--bg); color: var(--text); display: flex; height: 100vh;
+      -webkit-font-smoothing: antialiased; transition: background var(--transition), color var(--transition);
+    }
+    button, textarea, select, input { font: inherit; color: inherit; outline: none; }
+    button { cursor: pointer; background: none; border: none; }
+
+    /* Alignment: Top Bar & Sidebar Header */
+    .top-bar, .sidebar-header {
+      height: 57px; 
+      display: flex;
+      align-items: center;
+      background: var(--topbar-bg);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      transition: background var(--transition), border-color var(--transition);
+    }
+    .top-bar { padding: 0 16px; gap: 8px; flex-wrap: nowrap; overflow-x: auto; z-index: 10; }
+    .top-bar::-webkit-scrollbar { display: none; }
+    .top-bar .spacer { flex: 1; }
+    
+    .sidebar-header { padding: 0 16px; gap: 12px; }
+
+    /* Sidebar Structure */
+    .sidebar {
+      position: relative;
+      width: 360px; min-width: 200px; max-width: 800px;
+      flex-shrink: 0; background: var(--panel); border-right: 1px solid var(--border); 
+      display: flex; flex-direction: column; z-index: 10; 
+      box-shadow: 1px 0 12px rgba(0, 0, 0, 0.02);
+      transition: background var(--transition), border-color var(--transition);
+    }
+    .sidebar-content {
+      padding: 16px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      overflow-y: auto;
+    }
+    
+    /* Drag Resizer */
+    .resizer {
+      position: absolute; right: 0; top: 0; bottom: 0; width: 6px;
+      cursor: col-resize; z-index: 20; background: transparent; transition: background 0.2s;
+    }
+    .resizer:hover, .resizer.active { background: var(--border); }
+    
+    /* Strict Collapse Overrides */
+    .sidebar.collapsed { width: 60px !important; min-width: 60px !important; overflow: hidden; }
+    .sidebar.collapsed .sidebar-header { padding: 0; justify-content: center; }
+    .sidebar.collapsed .header-link { justify-content: center; }
+    .sidebar.collapsed .sidebar-content { display: none; }
+    .sidebar.collapsed .logo-mark { display: flex; }
+    .sidebar.collapsed .logo-text { display: none; }
+    .sidebar.collapsed .resizer { display: none; }
+
+    /* Brand Logo */
+    .header-link { 
+      text-decoration: none; 
+      display: flex; 
+      align-items: center; 
+      justify-content: center;
+      gap: 12px; 
+      width: 100%; 
+    }
+    .logo-mark {
+      width: 32px; height: 32px; background: var(--primary); color: var(--panel);
+      display: none; align-items: center; justify-content: center; 
+      font-weight: 900; font-size: 18px; border-radius: 6px; flex-shrink: 0;
+    }
+    .logo-text { display: flex; flex-direction: column; gap: 2px; align-items: center; }
+    .logo-title { font-weight: 900; font-size: 20px; letter-spacing: -1.2px; line-height: 1; }
+    
+    .logo-title .prefix { color: #94a3b8; } 
+    .logo-title .logo-suffix { color: #0f172a; }
+    [data-theme="dark"] .logo-title .logo-suffix { color: #ffffff; }
+    
+    .logo-title .brand-view { font-weight: 500; color: #475569; font-size: 18px; letter-spacing: -0.5px; }
+    .logo-tagline { font-weight: 600; font-size: 8.5px; color: #64748b; letter-spacing: 0.5px; line-height: 1; text-transform: uppercase; }
+
+    /* Form Elements */
+    textarea {
+      width: 100%; flex: 1; resize: none; border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 12px; background: var(--bg);
+      color: var(--text); font-family: var(--mono); font-size: 13px; line-height: 1.55;
+      transition: border-color var(--transition), background var(--transition), box-shadow var(--transition);
+    }
+    textarea:focus { border-color: #94a3b8; box-shadow: 0 0 0 3px var(--primary-hi); }
+    
+    /* Buttons */
+    .btn {
+      padding: 0 16px; height: 36px; border: 1px solid var(--border);
+      border-radius: var(--radius-sm); background: var(--btn-bg); color: var(--text);
+      font-size: 13px; font-weight: 500; display: flex; align-items: center;
+      justify-content: center; gap: 6px; transition: all var(--transition);
+      white-space: nowrap; box-shadow: var(--shadow-sm);
+    }
+    .btn:hover { background: var(--btn-hover); border-color: #94a3b8; }
+    .btn:active { transform: translateY(1px); box-shadow: none; }
+    .btn.sm { padding: 0 12px; height: 32px; font-size: 13px; }
+    .btn.icon-btn { padding: 0 10px; }
+    .btn.full { width: 100%; }
+    .btn:disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
+    
+    .btn-group { display: flex; gap: 0; box-shadow: var(--shadow-sm); border-radius: var(--radius-sm); }
+    .btn-group .btn { border-radius: 0; box-shadow: none; }
+    .btn-group .btn:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); border-right: none; }
+    .btn-group .btn:last-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+    
+    .action-btn { width: 115px; text-align: center; justify-content: center; }
+
+    /* Canvas Area */
+    .preview { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
+    .canvas-wrapper { flex: 1; position: relative; display: flex; flex-direction: column; min-width: 0; }
+    
+    /* Spaced Dot Matrix Background */
+    #cy {
+      flex: 1; width: 100%; outline: none; background-color: var(--bg);
+      background-image: radial-gradient(var(--grid-dot) 1.5px, transparent 1.5px);
+      background-size: 32px 32px;
+      background-position: 0 0;
+      transition: background var(--transition);
+    }
+    
+    #selectionRect {
+      position: absolute; pointer-events: none; z-index: 15;
+      border: 2px solid #2563eb; background: rgba(37, 99, 235, 0.1);
+      border-radius: 3px; display: none;
+    }
+
+    .brand-watermark {
+      position: fixed; bottom: 12px; right: 16px; z-index: 100;
+      font-size: 11px; color: var(--text-faint); text-decoration: none; transition: color var(--transition);
+    }
+    .brand-watermark:hover { color: var(--text-muted); }
+
+    /* Toasts */
+    .error-toast {
+      position: absolute; bottom: 20px; right: 20px; background: #fef2f2; color: #991b1b;
+      padding: 12px 16px; border-radius: var(--radius-sm); font-size: 14px;
+      border: 1px solid #f87171; box-shadow: var(--shadow); display: none; z-index: 20; max-width: 340px;
+    }
+    .history-toast {
+      position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+      background: var(--panel); color: var(--text); padding: 8px 16px;
+      border-radius: 20px; font-size: 13px; border: 1px solid var(--border);
+      box-shadow: var(--shadow); opacity: 0; z-index: 20; pointer-events: none; transition: opacity 0.3s;
+    }
+    .history-toast.show { opacity: 1; }
+
+    /* Modals & Switch */
+    .overlay {
+      position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45); z-index: 1000;
+      display: none; align-items: center; justify-content: center; backdrop-filter: blur(3px); padding: 16px;
+    }
+    .overlay.open { display: flex; }
+    .modal {
+      background: var(--panel); color: var(--text); width: 100%; max-width: 480px;
+      max-height: 88vh; border-radius: var(--radius-lg); box-shadow: var(--shadow);
+      display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--border);
+      animation: modal-in 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes modal-in {
+      from { opacity: 0; transform: scale(0.96) translateY(8px); }
+      to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+    .modal-header {
+      padding: 16px 20px; border-bottom: 1px solid var(--divider); display: flex;
+      justify-content: space-between; align-items: center; font-weight: 600; font-size: 16px; flex-shrink: 0;
+    }
+    .modal-body { padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; font-size: 14px; line-height: 1.6; }
+    .close-btn {
+      width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center;
+      justify-content: center; font-size: 20px; color: var(--text-muted); transition: background var(--transition), color var(--transition);
+    }
+    .close-btn:hover { background: var(--btn-hover); color: var(--text); }
+    .settings-section { display: flex; flex-direction: column; gap: 14px; }
+    .setting-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .setting-label { font-size: 14px; color: var(--text); font-weight: 500; }
+    
+    select.sel, input[type="number"].sel {
+      padding: 6px; border-radius: var(--radius-sm); border: 1px solid var(--border);
+      background: var(--btn-bg); color: var(--text); font-size: 13px; font-weight: 500; font-family: inherit;
+      transition: border-color var(--transition), background var(--transition); cursor: pointer; box-shadow: var(--shadow-sm);
+    }
+    input[type="number"].sel { width: 70px; cursor: text; }
+    select.sel:focus, input[type="number"].sel:focus { border-color: #94a3b8; outline: none;}
+
+    /* Color Picker */
+    .color-picker-section { display: flex; flex-direction: column; gap: 10px; }
+    .color-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; }
+    .color-swatch {
+      width: 100%; aspect-ratio: 1; border-radius: 6px; border: 2px solid transparent;
+      cursor: pointer; transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+    }
+    .color-swatch:hover { transform: scale(1.15); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2); z-index: 2; position: relative;}
+    .color-swatch.selected { border-color: var(--text); box-shadow: 0 0 0 3px var(--primary-hi); }
+    .color-custom-row { display: flex; align-items: center; gap: 8px; margin-top: 4px; flex-wrap: wrap;}
+    .color-custom-row label { font-size: 14px; color: var(--text-muted); white-space: nowrap; }
+    input[type="color"] {
+      width: 38px; height: 32px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+      padding: 2px; cursor: pointer; background: var(--bg);
+    }
+    .color-preview-label { font-size: 13px; color: var(--text-muted); font-family: var(--mono); }
+
+    /* Help Section */
+    .help-section { margin-bottom: 12px; }
+    .help-section h3 { font-size: 14px; font-weight: 600; margin-bottom: 8px; color: var(--text); }
+    .help-section pre {
+      background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
+      padding: 12px 14px; font-size: 12.5px; font-family: var(--mono); line-height: 1.55; overflow-x: auto; white-space: pre; color: var(--text);
+    }
+    .help-section ul { padding-left: 18px; color: var(--text-muted); margin-bottom: 8px;}
+    .help-section ul li { margin-bottom: 4px; }
+    .help-section code { background: var(--btn-bg); border: 1px solid var(--border); padding: 2px 6px; border-radius: 4px; font-family: var(--mono); font-size: 12px; }
+    hr.divider { border: none; border-top: 1px solid var(--divider); }
+
+  </style>
+</head>
+<body>
+
+  <aside class="sidebar" id="sidebar">
+    <div class="resizer" id="resizer"></div>
+    
+    <div class="sidebar-header">
+      <a href="https://latrel.ai/visualizer/" target="_blank" title="Built by Latrel.ai" class="header-link">
+        <div class="logo-mark">L</div>
+        <div class="logo-text">
+          <div class="logo-title">
+            <span class="prefix">LAT</span><span class="logo-suffix">REL</span> <span class="brand-view">VIEW</span>
+          </div>
+          <div class="logo-tagline">
+            Privacy-First Architecture Visualizer
+          </div>
+        </div>
+      </a>
+    </div>
+    
+    <div class="sidebar-content">
+      <textarea id="code" spellcheck="false" placeholder="Paste JSON array here to auto-render..."></textarea>
+      
+      <button id="helpBtn" class="btn sm full" title="Syntax Guide & Help" style="justify-content: center;">
+        Syntax Guide & Prompt
+      </button>
+      
+      <div style="margin-top:auto; font-size:10px; color:var(--text-faint); text-align:center; line-height: 1.6;">
+        Powered by <a href="https://js.cytoscape.org/" target="_blank" style="color:var(--text-muted); text-decoration:none; font-weight:500;">Cytoscape.js</a>
+      </div>
+    </div>
+  </aside>
+
+  <section class="preview">
+    <header class="top-bar">
+      <button id="toggleSidebarBtn" class="btn sm icon-btn" title="Toggle Sidebar">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <rect x="1" y="1" width="14" height="14" rx="2"/><line x1="5" y1="1" x2="5" y2="15"/></svg>
+      </button>
+      
+      <div class="spacer"></div>
+      
+      <div class="btn-group">
+        <button id="undoBtn" class="btn sm icon-btn" title="Undo (Ctrl+Z)" disabled>
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 7H11a3 3 0 0 1 0 6H8"/><path d="M3 7L6 4M3 7L6 10"/></svg>
+        </button>
+        <button id="redoBtn" class="btn sm icon-btn" title="Redo (Ctrl+Y)" disabled>
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M13 7H5a3 3 0 0 0 0 6H8"/><path d="M13 7L10 4M13 7L10 10"/></svg>
+        </button>
+      </div>
+      
+      <button id="rotateBtn" class="btn sm action-btn" title="Rotate Layout">Rotate Mode</button>
+      
+      <select id="layoutSelect" class="sel sm action-btn" title="Select Algorithm">
+        <option value="elk" selected>Flow</option>
+        <option value="dagre">Strict Tree</option>
+        <option value="klay">Orthogonal</option>
+      </select>
+
+      <button id="arrangeBtn" class="btn sm action-btn" title="Arrange & fit to screen">Arrange</button>
+      
+      <select id="saveExportSelect" class="sel sm action-btn">
+        <option value="" disabled selected>Export</option>
+        <option value="json">Save JSON</option>
+        <option value="png">Save PNG</option>
+        <option value="svg">Save SVG</option>
+      </select>
+
+      <button id="themeToggleBtn" class="btn sm icon-btn" title="Toggle Dark/Light Mode">
+        <i class="ph ph-moon" id="themeIcon" style="font-size:18px;"></i>
+      </button>
+      
+      <button id="settingsBtn" class="btn sm icon-btn" title="Preferences">
+        <i class="ph ph-gear" style="font-size:18px;"></i>
+      </button>
+    </header>
+    
+    <div class="canvas-wrapper">
+      <div id="cy"></div>
+      <div id="selectionRect"></div>
+      <div id="errBox" class="error-toast"></div>
+      <div id="historyToast" class="history-toast"></div>
+    </div>
+    
+    <a href="https://latrel.ai" target="_blank" class="brand-watermark">
+      Latrel.ai
+    </a>
+  </section>
+
+  <div class="overlay" id="settingsModal">
+    <div class="modal">
+      <div class="modal-header">
+        <span>Preferences</span>
+        <button class="close-btn" id="closeSettings">&times;</button>
+      </div>
+      <div class="modal-body">
+        
+        <div class="settings-section">
+          <div class="setting-row">
+            <div>
+              <div class="setting-label">Save Current Layout</div>
+              <div style="font-size: 12px; color: var(--text-muted); margin-top:2px;">Sync graph to JSON code.</div>
+            </div>
+            <button id="saveLayoutBtn" class="btn sm">Sync Layout</button>
+          </div>
+        </div>
+
+        <hr class="divider">
+
+        <div class="settings-section">
+          <div class="setting-row">
+            <div><div class="setting-label">Appearance Mode</div></div>
+            <select id="appearanceModeSelect" class="sel">
+              <option value="patent" selected>B&W Line Art</option>
+              <option value="shaded">Grayscale</option>
+              <option value="color">Full Color</option>
+            </select>
+          </div>
+          
+          <div class="setting-row">
+            <div><div class="setting-label">Font Style & Size</div></div>
+            <div style="display: flex; gap: 8px;">
+              <select id="fontFamilySelect" class="sel" style="flex: 1;">
+                <option value="var(--font)">System Sans</option>
+                <option value="'Times New Roman', Times, serif" selected>Times New Roman</option>
+                <option value="var(--mono)">Monospace</option>
+              </select>
+              <input type="number" id="fontSizeInput" class="sel" style="width: 60px;" value="13" min="8" max="32">
+            </div>
+          </div>
+          
+          <div class="setting-row">
+            <div><div class="setting-label">Arrow Style</div></div>
+            <select id="edgeSelect" class="sel">
+              <option value="bezier" selected>Bezier (Smooth)</option>
+              <option value="taxi">Taxi (Orthogonal)</option>
+            </select>
+          </div>
+        </div>
+
+        <hr class="divider">
+
+        <div class="setting-label">Color Picker (Disabled in Patent Mode)</div>
+        <div id="selectedNodeInfo" style="font-size:13px; color:var(--text-muted); padding:8px 12px; background:var(--bg); border-radius:var(--radius-sm); border:1px solid var(--border);">
+          Select a node to change color.
+        </div>
+        <div class="color-picker-section">
+          <div class="color-grid" id="colorGrid"></div>
+          <div class="color-custom-row">
+            <label>Custom:</label>
+            <input type="color" id="customColorPicker" value="#0f172a">
+            <span class="color-preview-label" id="customColorLabel" style="width: 60px;">#0f172a</span>
+            <div style="flex: 1;"></div>
+            <button class="btn sm" id="applyCustomColor">Apply</button>
+            <button class="btn sm" id="resetColorBtn" style="color: #ef4444; border-color: #fca5a5;">Clear Color</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="helpModal">
+    <div class="modal">
+      <div class="modal-header">
+        <span>Syntax Guide & LLM Prompt</span>
+        <button class="close-btn" id="closeHelp">&times;</button>
+      </div>
+      <div class="modal-body" style="padding-top: 10px;">
+        
+        <div class="help-section">
+          <h3>1. LLM Generation Prompt</h3>
+          <p style="font-size:13px; color:var(--text-muted); margin-bottom:8px;">Copy/paste this into ChatGPT or Claude to instantly generate architectures:</p>
+          <pre style="white-space: pre-wrap; word-break: break-word; color: #0284c7; background: #f0f9ff; border-color: #bae6fd;">You are an expert cloud architect. Create a JSON array representing the architecture diagram for [INSERT YOUR USE CASE HERE]. 
+
+Strict Rules:
+- Output ONLY a valid JSON array. No markdown, no explanations.
+- Nodes must have: "data": {"id": "unique_id", "label": "Short Name", "parent": "group_id" (optional), "type": "db" (optional for database shape)}.
+- Edges must have: "data": {"id": "e1", "source": "node1", "target": "node2", "label": "Action"}.
+- Group logical phases/tiers using parent nodes.</pre>
+        </div>
+        
+        <hr class="divider">
+        
+        <div class="help-section">
+          <h3>2. Node Syntax</h3>
+          <pre>{ "data": { "id": "api", "label": "API Gateway", "color": "#0f172a" } }</pre>
+          <ul>
+            <li><code>id</code> &mdash; Unique identifier (required)</li>
+            <li><code>label</code> &mdash; Display text</li>
+            <li><code>parent</code> &mdash; ID of a parent node (for nested grouping)</li>
+            <li><code>type</code> &mdash; Set <code>"db"</code> for database cylinder shape</li>
+          </ul>
+        </div>
+        <div class="help-section">
+          <h3>3. Edge Syntax</h3>
+          <pre>{ "data": { "id": "e1", "source": "api", "target": "db", "label": "query" } }</pre>
+        </div>
+        <div class="help-section">
+          <h3>4. Keyboard Shortcuts</h3>
+          <ul>
+            <li><code>Ctrl+drag</code> on canvas &mdash; Box-select multiple nodes</li>
+            <li><code>Ctrl+click</code> a node &mdash; Add/remove from selection</li>
+            <li><code>Ctrl+Z</code> / <code>Ctrl+Y</code> &mdash; Undo / Redo</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  // CENTRAL DIAGRAM CONFIGURATION
+  // Edit these values to globally change layout and styling behaviors
+  const DIAGRAM_CONFIG = {
+    spacing: {
+      baseGap: 110,          // Base distance (in px) between nodes for layouts (fallback)
+      dynamicFloor: 180,      // Minimum gap (in px) when calculating dynamic arrow text widths
+      textCharWidth: 7,       // Approx pixel width per character (used to calculate long labels)
+      textPadding: 100,       // Extra physical padding added to calculated text width
+      edgeLabelMax: 100,      // Maximum width (in px) before text on an arrow wraps to a new line
+      nodeLabelMax: 140,      // Maximum width (in px) before text inside a node wraps
+      exportMargin: 60        // Pixels of blank padding applied around the PNG export
+    },
+    elk: {
+      padding: '[top=60,left=40,bottom=40,right=40]', // Internal padding inside parent group nodes
+      edgeNodeSpacing: 40     // Distance ELK tries to keep between routing lines and node borders
+    },
+    timing: {
+      toastDuration: 1400,    // Milliseconds UI "toast" notifications stay on screen
+      sidebarTransition: 320, // Milliseconds to wait for sidebar CSS animation before resizing canvas
+      debounceDelay: 500,     // Milliseconds to wait after user stops typing before auto-rendering
+      resizeSettle: 50        // Milliseconds to wait during window drag before snapping layout
+    }
+  };
+
+  // 24-Color Organized Gradient Palette
+  const PALETTE = [
+    '#0f172a', '#1e3a8a', '#312e81', '#4c1d95', '#701a75', '#7f1d1d', '#7c2d12', '#14532d',
+    '#64748b', '#3b82f6', '#4f46e5', '#8b5cf6', '#d946ef', '#ef4444', '#f97316', '#22c55e',
+    '#94a3b8', '#93c5fd', '#a5b4fc', '#c4b5fd', '#f0abfc', '#fca5a5', '#fdba74', '#86efac'
+  ];
+  
+  // Max snapshot states stored in memory for Undo/Redo capability
+  const MAX_HISTORY = 50;
+
+  const $ = id => document.getElementById(id);
+  const codeEl = $('code');
+  const errBox = $('errBox');
+  const sidebar = $('sidebar');
+  const sidebarResizer = $('resizer');
+  
+  const appearanceModeSelect = $('appearanceModeSelect');
+  const fontFamilySelect = $('fontFamilySelect');
+  const fontSizeInput = $('fontSizeInput');
+  const edgeSelect = $('edgeSelect');
+  const layoutSelect = $('layoutSelect');
+  const saveExportSelect = $('saveExportSelect');
+  const customPicker = $('customColorPicker');
+  const customLabel = $('customColorLabel');
+  const nodeInfo = $('selectedNodeInfo');
+  const historyToast = $('historyToast');
+  const selectionRect = $('selectionRect');
+  const cyContainer = $('cy');
+  
+  const toggleSidebarBtn = $('toggleSidebarBtn');
+  const rotateBtn = $('rotateBtn');
+  const arrangeBtn = $('arrangeBtn');
+  const undoBtn = $('undoBtn');
+  const redoBtn = $('redoBtn');
+  const saveLayoutBtn = $('saveLayoutBtn');
+  
+  const settingsBtn = $('settingsBtn');
+  const closeSettings = $('closeSettings');
+  const settingsModal = $('settingsModal');
+  const helpBtn = $('helpBtn');
+  const closeHelp = $('closeHelp');
+
+  const themeToggleBtn = $('themeToggleBtn');
+  const themeIcon = $('themeIcon');
+  
+  const applyCustomBtn = $('applyCustomColor');
+  const resetColorBtn = $('resetColorBtn');
+
+  let cy;
+  let isDark = false;
+  let appearanceMode = 'patent'; // 'patent', 'shaded', 'light', 'dark'
+  let customFontFamily = "'Times New Roman', Times, serif";  let customFontSize = 13;
+  let edgeStyle = 'bezier'; 
+  let currentLayout = 'elk'; 
+  let isLandscape = true;   
+  let selectedNode = null;
+  let tappedBefore = null;
+  let undoStack = [];
+  let redoStack = [];
+  let _pauseHistory = false;
+  let _preDragSnapshot = null;
+  let boxStart = null;
+  let boxActive = false;
+
+  const getCssVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+  let isResizingSidebar = false;
+  sidebarResizer.addEventListener('mousedown', (e) => {
+    isResizingSidebar = true;
+    sidebarResizer.classList.add('active');
+    document.body.style.cursor = 'col-resize';
+    e.preventDefault();
+  });
+  
+  document.addEventListener('mousemove', (e) => {
+    if (!isResizingSidebar || sidebar.classList.contains('collapsed')) return;
+    let newWidth = e.clientX;
+    // Strict boundaries for sidebar resizing
+    if (newWidth < 200) newWidth = 200;
+    if (newWidth > 800) newWidth = 800;
+    sidebar.style.width = newWidth + 'px';
+  });
+  
+  document.addEventListener('mouseup', () => {
+    if (isResizingSidebar) {
+      isResizingSidebar = false;
+      sidebarResizer.classList.remove('active');
+      document.body.style.cursor = 'default';
+      // Allows sidebar to snap before Cytoscape redraws to fit new dimensions
+      if(cy) { setTimeout(() => { cy.resize(); cy.fit(null, 50); }, DIAGRAM_CONFIG.timing.resizeSettle); }
+    }
+  });
+
+  function captureSnapshot() {
+    if (!cy) return null;
+    return cy.elements().map(el => {
+      const s = { data: { ...el.data() } };
+      if (el.isNode()) s.position = { ...el.position() };
+      return s;
+    });
+  }
+
+  function pushHistory(snap) {
+    if (_pauseHistory || !snap) return;
+    undoStack.push(snap);
+    if (undoStack.length > MAX_HISTORY) undoStack.shift();
+    redoStack = [];
+    updateHistoryBtns();
+  }
+
+  function updateHistoryBtns() {
+    undoBtn.disabled = !undoStack.length;
+    redoBtn.disabled = !redoStack.length;
+  }
+
+  function showToast(msg) {
+    historyToast.textContent = msg;
+    historyToast.classList.add('show');
+    clearTimeout(historyToast._t);
+    historyToast._t = setTimeout(() => historyToast.classList.remove('show'), DIAGRAM_CONFIG.timing.toastDuration);
+  }
+
+  function restoreSnapshot(snap) {
+    if (!cy || !snap) return;
+    _pauseHistory = true;
+    cy.elements().remove();
+    cy.add(snap);
+    cy.edges().forEach(e => {
+      if (e.source().isParent() || e.target().isParent()) e.addClass('compound-edge');
+    });
+    applyEdgeDirections();
+    _pauseHistory = false;
+    updateHistoryBtns();
+  }
+
+  function undo() {
+    if (!undoStack.length) return;
+    redoStack.push(captureSnapshot());
+    restoreSnapshot(undoStack.pop());
+    showToast('↩ Undo');
+  }
+
+  function redo() {
+    if (!redoStack.length) return;
+    undoStack.push(captureSnapshot());
+    restoreSnapshot(redoStack.pop());
+    showToast('↪ Redo');
+  }
+
+  const pageToContainer = (px, py) => {
+    const r = cyContainer.getBoundingClientRect();
+    return { x: px - r.left, y: py - r.top };
+  };
+  const containerToCy = (px, py) => {
+    const p = cy.pan(); const z = cy.zoom();
+    return { x: (px - p.x) / z, y: (py - p.y) / z };
+  };
+
+  cyContainer.addEventListener('mousedown', e => {
+    if (e.button !== 0 || !(e.ctrlKey || e.metaKey)) return;
+    if (e.target !== cyContainer && !e.target.matches('canvas')) return;
+    e.preventDefault(); e.stopPropagation();
+    boxStart = pageToContainer(e.clientX, e.clientY); boxActive = true;
+    Object.assign(selectionRect.style, { display: 'block', left: boxStart.x + 'px', top: boxStart.y + 'px', width: '0', height: '0' });
+    cy.userPanningEnabled(false);
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!boxActive || !boxStart) return;
+    const pos = pageToContainer(e.clientX, e.clientY);
+    Object.assign(selectionRect.style, {
+      left: Math.min(pos.x, boxStart.x) + 'px', top: Math.min(pos.y, boxStart.y) + 'px',
+      width: Math.abs(pos.x - boxStart.x) + 'px', height: Math.abs(pos.y - boxStart.y) + 'px'
+    });
+  });
+
+  document.addEventListener('mouseup', e => {
+    if (!boxActive || !boxStart || !cy) return;
+    const pos = pageToContainer(e.clientX, e.clientY);
+    const tl = containerToCy(Math.min(pos.x, boxStart.x), Math.min(pos.y, boxStart.y));
+    const br = containerToCy(Math.max(pos.x, boxStart.x), Math.max(pos.y, boxStart.y));
+    
+    // Check if drag was larger than a 6px threshold to prevent accidental clicks triggering mass unselects
+    if ((br.x - tl.x) > 6 || (br.y - tl.y) > 6) {
+      if (!e.shiftKey) cy.nodes().unselect();
+      cy.nodes().forEach(node => {
+        if (node.isParent()) return;
+        const p = node.position(); const hw = node.width() / 2; const hh = node.height() / 2;
+        if (p.x + hw > tl.x && p.x - hw < br.x && p.y + hh > tl.y && p.y - hh < br.y) node.select();
+      });
+    }
+    selectionRect.style.display = 'none'; boxActive = false; boxStart = null; cy.userPanningEnabled(true);
+  });
+
+  function applyEdgeDirections() {
+    if (!cy || edgeStyle !== 'taxi') return;
+    cy.edges().forEach(edge => {
+      if (edge.hasClass('compound-edge') || edge.isLoop()) return;
+      edge.removeClass('taxi-right taxi-down taxi-up taxi-bezier-fallback');
+      const sp = edge.source().position(); const tp = edge.target().position();
+      if (!sp || !tp) return;
+      
+      const dx = tp.x - sp.x; const dy = tp.y - sp.y;
+      if (isLandscape) {
+        dx >= 0 ? edge.addClass('taxi-right') : edge.addClass(dy >= 0 ? 'taxi-down' : 'taxi-up');
+      } else {
+        if (Math.abs(dy) >= Math.abs(dx)) {
+          edge.addClass(dy >= 0 ? 'taxi-down' : 'taxi-up');
+        } else {
+          dx >= 0 ? edge.addClass('taxi-right') : edge.addClass(dy >= 0 ? 'taxi-down' : 'taxi-up');
+        }
+      }
+    });
+  }
+
+  function buildStyles() {
+    // Base colors (Full Color Theme)
+    let textC = getCssVar('--text');
+    let edgeColor = getCssVar('--cy-edge');
+    let nodeBg = getCssVar('--cy-node-bg');
+    let parentBg = getCssVar('--cy-parent-bg');
+    let parentBorder = getCssVar('--cy-parent-border');
+    let dbBg = getCssVar('--cy-db-bg');
+    let dbBorder = getCssVar('--cy-db-border');
+    let textBg = isDark ? '#0b1120' : '#f8fafc'; 
+    let shadowOp = 1;
+    let borderWidth = '1.5px';
+    let fontWt = '600';
+    let parentFontWt = '700';
+
+    // Overrides for Patent and Shaded modes
+    if (appearanceMode === 'patent') {
+      textC = '#000000'; edgeColor = '#000000'; nodeBg = '#ffffff'; 
+      parentBg = 'rgba(255, 255, 255, 0)'; parentBorder = '#000000';
+      dbBg = '#ffffff'; dbBorder = '#000000'; textBg = '#ffffff';
+      shadowOp = 0; borderWidth = '1px'; fontWt = 'normal'; parentFontWt = 'normal';
+    } else if (appearanceMode === 'shaded') {
+      textC = '#111111'; edgeColor = '#333333'; nodeBg = '#f4f4f4'; 
+      parentBg = 'rgba(200, 200, 200, 0.15)'; parentBorder = '#444444';
+      dbBg = '#e8e8e8'; dbBorder = '#444444'; textBg = '#f4f4f4';
+      shadowOp = 0; fontWt = '500'; parentFontWt = '600';
+    }
+
+    const curveStyle = edgeStyle === 'taxi' ? 'taxi' : 'bezier';
+    const fs = customFontSize + 'px';
+    const edgeFs = (customFontSize - 2) + 'px';
+
+    return [
+      { selector: 'node:childless', style: {
+          label: 'data(label)', 'text-valign': 'center', 'text-halign': 'center', color: textC,
+          'font-size': fs, 'font-weight': fontWt, 'font-family': customFontFamily,
+          'text-wrap': 'wrap', 'text-max-width': DIAGRAM_CONFIG.spacing.nodeLabelMax + 'px', shape: 'round-rectangle',
+          width: 'label', height: 'label',
+          'padding-top': '14px', 'padding-bottom': '14px',
+          'padding-left': '18px', 'padding-right': '18px',
+          'background-color': nodeBg,
+          'border-width': borderWidth, 'border-color': parentBorder, 
+          'shadow-blur': 12, 'shadow-color': 'rgba(15, 23, 42, 0.08)', 
+          'shadow-opacity': shadowOp, 'shadow-offset-y': 4, 'shadow-offset-x': 0
+      }},
+      { selector: ':parent', style: {
+          label: 'data(label)', 'text-valign': 'top', 'text-halign': 'center', color: textC, 
+          'font-size': (customFontSize + 1) + 'px', 'font-weight': parentFontWt, 'font-family': customFontFamily, shape: 'round-rectangle',
+          'background-color': parentBg, 'background-opacity': 1,
+          'border-color': parentBorder, 'border-style': 'dashed', 'border-width': borderWidth, 
+          'padding-top': '40px', 'padding-bottom': '24px', 'padding-left': '24px', 'padding-right': '24px',
+          // z-index 0 ensures parent blocks always sit behind child nodes
+          'shadow-opacity': 0, 'z-index': 0 
+      }},
+      { selector: 'node[type="db"]', style: { 'background-color': dbBg, 'border-color': dbBorder, shape: 'barrel' }},
+      
+      // Node color override (Ignored in Patent mode)
+      { selector: 'node[color]', style: { 
+        'background-color': appearanceMode === 'patent' ? nodeBg : 'data(color)', 
+        'border-color': appearanceMode === 'patent' ? parentBorder : 'data(color)', 
+        color: appearanceMode === 'patent' ? textC : '#ffffff' 
+      }},
+      
+      // ORIGINAL EDGE PRESERVED
+      { selector: 'edge', style: {
+          width: appearanceMode === 'patent' ? 1.5 : 2, 'line-color': edgeColor, 'target-arrow-color': edgeColor,
+          'target-arrow-shape': 'triangle', 'curve-style': curveStyle,
+          'taxi-direction': 'downward', 'taxi-turn': 40, 'taxi-turn-min-distance': 20,
+          'source-endpoint': 'outside-to-node', 'target-endpoint': 'outside-to-node',
+          label: 'data(label)', 'font-size': edgeFs, 'font-weight': '500', color: textC, 'font-family': customFontFamily,
+          'text-wrap': 'wrap', 'text-max-width': DIAGRAM_CONFIG.spacing.edgeLabelMax + 'px',
+          'text-margin-y': -16,
+          'text-background-color': textBg, 'text-background-opacity': appearanceMode === 'patent' ? 0.9 : 1,
+          'text-background-padding': '5px', 'text-background-shape': 'round-rectangle',
+          // z-index 9999 ensures arrow labels hover over everything, minimizing lines cutting through text
+          'z-index': 9999, 'z-compound-depth': 'top' 
+      }},
+      { selector: 'edge.taxi-right', style: { 'curve-style': 'taxi', 'taxi-direction': 'rightward' }},
+      { selector: 'edge.taxi-down', style: { 'curve-style': 'taxi', 'taxi-direction': 'downward' }},
+      { selector: 'edge.taxi-up', style: { 'curve-style': 'taxi', 'taxi-direction': 'upward' }},
+      // Fallback for dashed representations (often used for async calls)
+      { selector: 'edge[dashed]', style: { 'line-style': 'dashed', 'line-dash-pattern': [6, 4] }},
+      { selector: 'edge.compound-edge', style: { 'curve-style': 'bezier' }},
+      { selector: 'edge:loop', style: { 'curve-style': 'bezier' }},
+      { selector: ':selected', style: {
+          'border-color': '#2563eb', 
+          'border-width': '2px',
+          'underlay-color': '#3b82f6',
+          'underlay-padding': '4px',
+          'underlay-opacity': 0.25,
+          'z-index': 9999
+      }}
+    ];
+  }
+
+  function initCy() {
+    cy = cytoscape({
+      container: cyContainer, style: buildStyles(),
+      // wheelSensitivity controls zoom speed. Kept low (0.15) for smoother scrollpad UX
+      wheelSensitivity: 0.15, minZoom: 0.15, maxZoom: 4,
+      selectionType: 'additive', boxSelectionEnabled: false
+    });
+
+    cy.on('grab', 'node', () => { _preDragSnapshot = captureSnapshot(); });
+    cy.on('dragfree', 'node', () => {
+      if (_preDragSnapshot) {
+        _pauseHistory = true; undoStack.push(_preDragSnapshot);
+        if (undoStack.length > MAX_HISTORY) undoStack.shift();
+        redoStack = []; _pauseHistory = false; _preDragSnapshot = null; updateHistoryBtns();
+      }
+      applyEdgeDirections();
+    });
+
+    cy.on('tap', 'node', function(e) {
+      const node = e.target;
+      const isCtrl = e.originalEvent && (e.originalEvent.ctrlKey || e.originalEvent.metaKey);
+      
+      if (isCtrl) { node.selected() ? node.unselect() : node.select(); return; }
+      
+      cy.nodes().unselect(); node.select(); selectedNode = node;
+      const d = node.data();
+      nodeInfo.innerHTML = `<strong>Selected:</strong> ${d.label || d.id} <span style="color:var(--text-faint)">(id: ${d.id})</span>`;
+      
+      if (tappedBefore === node) {
+        tappedBefore = null; settingsModal.classList.add('open');
+      } else {
+        // 300ms window detects double-taps for opening the settings modal quickly
+        tappedBefore = node; setTimeout(() => { tappedBefore = null; }, 300);
+      }
+    });
+
+    cy.on('tap', function(e) {
+      if (e.target === cy) { cy.nodes().unselect(); selectedNode = null; nodeInfo.textContent = 'No node selected — click a node on the canvas first.'; }
+    });
+  }
+
+  function runLayout(animate = false) {
+    if (!cy) return;
+    
+    // Calculates longest edge label to inform the layout engine spacing
+    let maxLabelChars = 0;
+    cy.edges().forEach(edge => {
+      const label = edge.data('label') || '';
+      if (label.length > maxLabelChars) maxLabelChars = label.length;
+    });
+
+    // Calculates the required physical gap relying on centralized config parameters
+    const dynamicGap = Math.max(DIAGRAM_CONFIG.spacing.dynamicFloor, (maxLabelChars * DIAGRAM_CONFIG.spacing.textCharWidth) + DIAGRAM_CONFIG.spacing.textPadding);
+
+    const flowGap = isLandscape ? dynamicGap : DIAGRAM_CONFIG.spacing.baseGap;  
+    const orthoGap = isLandscape ? DIAGRAM_CONFIG.spacing.baseGap : dynamicGap;
+
+    let layoutOptions = {};
+    
+    // Dagre: Strict Tree layout commonly used for flowcharts
+    if (currentLayout === 'dagre') {
+      layoutOptions = {
+        name: 'dagre', rankDir: isLandscape ? 'LR' : 'TB',
+        padding: 50, spacingFactor: 1.1, 
+        nodeSep: orthoGap, 
+        edgeSep: 40, 
+        rankSep: flowGap, 
+        animate, animationDuration: animate ? 400 : 0, animationEasing: 'ease-in-out-cubic',
+        randomize: false 
+      };
+    // Klay: Orthogonal layout, good for layered structures
+    } else if (currentLayout === 'klay') {
+      layoutOptions = {
+        name: 'klay', nodeDimensionsIncludeLabels: true,
+        klay: { 
+          direction: isLandscape ? 'RIGHT' : 'DOWN', 
+          spacing: orthoGap,
+          layoutHierarchy: true, compactComponents: true, thoroughness: 10 
+        },
+        animate, animationDuration: animate ? 400 : 0, randomize: false
+      };
+    // ELK: Complex block flow layout (The primary engine used)
+    } else if (currentLayout === 'elk') {
+      layoutOptions = {
+        name: 'elk', 
+        nodeDimensionsIncludeLabels: true,
+        
+        // Injects gaps into sub-graphs so child nodes spread properly inside parent groups
+        nodeLayoutOptions: function(node) {
+          return {
+            'algorithm': 'layered',
+            'elk.direction': 'RIGHT',
+            'elk.layered.spacing.nodeNodeBetweenLayers': flowGap,
+            'elk.spacing.nodeNode': orthoGap
+          };
+        },
+
+        elk: { 
+          algorithm: 'layered',
+          'elk.direction': isLandscape ? 'RIGHT' : 'DOWN',
+          'elk.layered.spacing.nodeNodeBetweenLayers': flowGap, 
+          'elk.spacing.nodeNode': orthoGap, 
+          'elk.spacing.componentComponent': orthoGap,
+          'elk.padding': DIAGRAM_CONFIG.elk.padding,                
+          'elk.spacing.edgeNode': DIAGRAM_CONFIG.elk.edgeNodeSpacing
+        },
+        animate, animationDuration: animate ? 400 : 0
+      };
+    }
+    
+    const l = cy.layout(layoutOptions);
+    l.on('layoutstop', () => {
+      // 50px padding added when fitting graph to viewport bounds
+      cy.fit(null, 50); 
+      cy.style(buildStyles());
+      applyEdgeDirections();
+    });
+    l.run();
+  }
+
+  function renderData(pushToHistory = true) {
+    const val = codeEl.value.trim();
+    if (!val) { if (cy) cy.elements().remove(); errBox.style.display = 'none'; return; }
+    
+    try {
+      const raw = JSON.parse(val); errBox.style.display = 'none';
+      if (!cy) initCy();
+      
+      const nodeIds = new Set(raw.filter(el => !el.data.source && !el.data.target).map(el => el.data.id));
+      const bad = raw.filter(el => (el.data.source || el.data.target) && (!nodeIds.has(el.data.source) || !nodeIds.has(el.data.target)));
+      if (bad.length) throw new Error('Edge references missing node: ' + bad[0].data.id);
+      
+      if (pushToHistory && cy.elements().length > 0) {
+        undoStack.push(captureSnapshot());
+        if (undoStack.length > MAX_HISTORY) undoStack.shift();
+        redoStack = []; updateHistoryBtns();
+      }
+      
+      _pauseHistory = true; cy.elements().remove(); cy.add(raw);
+      cy.edges().forEach(e => { if (e.source().isParent() || e.target().isParent()) e.addClass('compound-edge'); });
+      _pauseHistory = false;
+      
+      const nodes = raw.filter(el => !el.data.source && !el.data.target);
+      const hasPos = nodes.length > 0 && nodes.every(n => n.position);
+      
+      if (!hasPos) { runLayout(false); } 
+      // Fit with 50px padding if custom positions exist
+      else { cy.style(buildStyles()); applyEdgeDirections(); cy.fit(null, 50); }
+    } catch(err) {
+      errBox.textContent = (err instanceof SyntaxError ? 'Invalid JSON: ' : 'Error: ') + err.message;
+      errBox.style.display = 'block';
+    }
+  }
+
+  function buildColorGrid() {
+    const grid = $('colorGrid'); grid.innerHTML = '';
+    PALETTE.forEach(hex => {
+      const sw = document.createElement('button'); sw.className = 'color-swatch';
+      sw.style.background = hex; sw.title = hex;
+      sw.addEventListener('click', () => applyColorToSelected(hex));
+      grid.appendChild(sw);
+    });
+  }
+
+  function applyColorToSelected(hex) {
+    if (!selectedNode) { nodeInfo.textContent = 'No node selected — click a node on the canvas first.'; return; }
+    pushHistory(captureSnapshot());
+    selectedNode.data('color', hex);
+    
+    // Calculates luminance to determine if text should swap from white to dark for legibility
+    if (appearanceMode !== 'patent') {
+      const r = parseInt(hex.slice(1,3), 16), g = parseInt(hex.slice(3,5), 16), b = parseInt(hex.slice(5,7), 16);
+      selectedNode.style({ 'background-color': hex, 'border-color': hex, color: (0.299*r + 0.587*g + 0.114*b) / 255 > 0.55 ? '#1a1a1a' : '#ffffff' });
+    }
+    syncCodeFromGraph();
+  }
+
+  resetColorBtn.addEventListener('click', () => {
+    if (!selectedNode) return;
+    pushHistory(captureSnapshot());
+    selectedNode.removeData('color');
+    selectedNode.removeStyle();
+    cy.style(buildStyles());
+    syncCodeFromGraph();
+  });
+
+  function syncCodeFromGraph() {
+    if (!cy) return;
+    codeEl.value = JSON.stringify(cy.elements().map(el => {
+      const i = { data: { ...el.data() } };
+      if (el.isNode() && !el.isParent()) i.position = { ...el.position() };
+      return i;
+    }), null, 2);
+  }
+
+  function loadState() {
+    isDark = false; edgeStyle = 'bezier'; currentLayout = 'elk'; isLandscape = true;
+    appearanceModeSelect.value = appearanceMode;
+    fontFamilySelect.value = customFontFamily;
+    fontSizeInput.value = customFontSize;
+    edgeSelect.value = edgeStyle; 
+    layoutSelect.value = currentLayout;
+    document.documentElement.setAttribute('data-theme', 'light');
+  }
+
+  arrangeBtn.addEventListener('click', () => { if (!cy || !cy.elements().length) return; pushHistory(captureSnapshot()); runLayout(true); showToast('Auto-arranged'); });
+  undoBtn.addEventListener('click', undo);
+  redoBtn.addEventListener('click', redo);
+
+  rotateBtn.addEventListener('click', () => {
+    isLandscape = !isLandscape;
+    if (cy) { pushHistory(captureSnapshot()); cy.style(buildStyles()); runLayout(true); }
+  });
+
+  layoutSelect.addEventListener('change', e => {
+    currentLayout = e.target.value;
+    if (cy && cy.elements().length > 0) { pushHistory(captureSnapshot()); runLayout(true); }
+  });
+
+  toggleSidebarBtn.addEventListener('click', () => {
+    sidebar.classList.toggle('collapsed');
+    if (cy) setTimeout(() => { cy.resize(); cy.fit(null, 50); }, DIAGRAM_CONFIG.timing.sidebarTransition);
+  });
+
+  saveExportSelect.addEventListener('change', e => {
+    const val = e.target.value;
+    if (!val || !cy || !cy.elements().length) return;
+    if (val === 'json') {
+      const blob = new Blob([codeEl.value.trim()], { type: 'application/json' });
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'diagram-data.json'; a.click(); URL.revokeObjectURL(a.href);
+    } else if (val === 'png') {
+      const bb = cy.elements().boundingBox();
+      const margin = DIAGRAM_CONFIG.spacing.exportMargin;
+      const paddedBb = { x1: bb.x1 - margin, y1: bb.y1 - margin, x2: bb.x2 + margin, y2: bb.y2 + margin, w: bb.w + margin * 2, h: bb.h + margin * 2 };
+      
+      let bgExp = '#ffffff';
+      if (appearanceMode !== 'patent') {
+        bgExp = isDark ? '#0b1120' : '#f8fafc';
+      }
+      
+      // Scale: 4 creates a high-resolution export suitable for zooming and sharing
+      const blob = cy.png({ output: 'blob', bg: bgExp, boundingBox: paddedBb, scale: 4 });
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'diagram.png'; a.click(); URL.revokeObjectURL(a.href);
+    }else if (val === 'svg') {
+      let bgExp = appearanceMode !== 'patent' && isDark ? '#0b1120' : '#ffffff';
+      const svgContent = cy.svg({ scale: 1, full: true, bg: bgExp });
+      const blob = new Blob([svgContent], { type: 'image/svg+xml;charset=utf-8' });
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'diagram.svg'; a.click(); URL.revokeObjectURL(a.href);
+    }
+    
+    e.target.value = '';
+  });
+
+  saveLayoutBtn.addEventListener('click', () => {
+    if (!cy) return;
+    syncCodeFromGraph();
+    const orig = saveLayoutBtn.innerHTML;
+    saveLayoutBtn.innerHTML = '✔ Synced';
+    saveLayoutBtn.style.cssText = 'background:var(--primary);color:#ffffff;border-color:var(--primary)';
+    // UI resets after a short delay
+    setTimeout(() => { saveLayoutBtn.innerHTML = orig; saveLayoutBtn.style.cssText = ''; }, 1500);
+  });
+
+  settingsBtn.addEventListener('click', () => settingsModal.classList.add('open'));
+  closeSettings.addEventListener('click', () => settingsModal.classList.remove('open'));
+  settingsModal.addEventListener('click', e => { if (e.target === settingsModal) settingsModal.classList.remove('open'); });
+  helpBtn.addEventListener('click', () => helpModal.classList.add('open'));
+  closeHelp.addEventListener('click', () => helpModal.classList.remove('open'));
+  helpModal.addEventListener('click', e => { if (e.target === helpModal) helpModal.classList.remove('open'); });
+
+  appearanceModeSelect.addEventListener('change', () => { 
+    appearanceMode = appearanceModeSelect.value; 
+    if (cy) { cy.style(buildStyles()); applyEdgeDirections(); }
+  });
+
+  themeToggleBtn.addEventListener('click', () => {
+    isDark = !isDark;
+    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+    themeIcon.className = isDark ? 'ph ph-sun' : 'ph ph-moon';
+    if (cy) { cy.style(buildStyles()); applyEdgeDirections(); }
+  });
+  
+  fontFamilySelect.addEventListener('change', () => {
+    customFontFamily = fontFamilySelect.value;
+    if (cy) { cy.style(buildStyles()); runLayout(true); }
+  });
+
+  fontSizeInput.addEventListener('change', () => {
+    const val = parseInt(fontSizeInput.value);
+    if (val >= 8 && val <= 32) { 
+      customFontSize = val; 
+      if (cy) { cy.style(buildStyles()); runLayout(true); } 
+    }
+  });
+
+  edgeSelect.addEventListener('change', () => { edgeStyle = edgeSelect.value; if (cy) { cy.style(buildStyles()); applyEdgeDirections(); } });
+  customPicker.addEventListener('input', () => { customLabel.textContent = customPicker.value; });
+  applyCustomBtn.addEventListener('click', () => applyColorToSelected(customPicker.value));
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { settingsModal.classList.remove('open'); helpModal.classList.remove('open'); if (cy) cy.nodes().unselect(); return; }
+    if (document.activeElement === codeEl) return;
+    if (e.ctrlKey || e.metaKey) {
+      if (e.key === 'a') { e.preventDefault(); if (cy) cy.nodes().select(); showToast('All nodes selected'); }
+      if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+      if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) { e.preventDefault(); redo(); }
+    }
+  });
+
+  let debounceId;
+  // Trigger re-render with slight debounce so it doesn't fire on every keystroke
+  codeEl.addEventListener('input', () => { clearTimeout(debounceId); debounceId = setTimeout(() => renderData(false), DIAGRAM_CONFIG.timing.debounceDelay); });
+
+  loadState();
+  buildColorGrid();
+  initCy();
+  updateHistoryBtns();
+  if (codeEl.value) renderData(true);
+  </script>
+</body>
+</html>
