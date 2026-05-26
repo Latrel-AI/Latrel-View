@@ -1,20 +1,16 @@
-# Latrel Private Architecture Visualizer
+# Latrel Privacy-First Architecture Visualizer
 
-> A privacy-first, JSON-driven infrastructure visualizer. Your architecture stays in your browser.
+> A local-first infrastructure visualizer. Map your cloud architecture using JSON with zero data leaving your machine.
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue) ![License](https://img.shields.io/badge/license-MIT%20(with%20Attribution)-green) ![No Backend](https://img.shields.io/badge/backend-none-brightgreen) ![Single File](https://img.shields.io/badge/deployment-single_file-brightgreen)
+![Version](https://img.shields.io/badge/version-1.1.0-blue) ![License](https://img.shields.io/badge/license-MIT%20(with%20Attribution)-green) ![No Backend](https://img.shields.io/badge/backend-none-brightgreen) ![Single File](https://img.shields.io/badge/deployment-single_file-brightgreen)
 
----
 
 ## Why This Exists
 
-Most diagramming tools require you to manually draw boxes, or worse, they force you to send your proprietary cloud architecture to a third-party server to be parsed.
+Most diagramming tools require manual drag-and-drop or send your proprietary architecture to their servers. We built this to let you define infrastructure as a simple JSON array and render it instantly in your browser. 
 
-Latrel's Architecture Visualizer solves both problems. You define your infrastructure as a simple JSON array, and the visualizer maps it instantly. **No servers. No accounts. No telemetry.** Your infrastructure blueprint never leaves your local machine.
-
-This is part of how [Latrel.ai](https://latrel.ai) builds tools: **Productivity that doesn't compromise your data privacy.**
-
----
+**No servers. No accounts. No telemetry.** Originally built as an internal tool for [Latrel.ai](https://latrel.ai), now open-sourced. 
+> **Want to see our main product?** [Join the Latrel.ai Beta Waitlist](https://latrel.ai/beta).
 
 ## Features
 
@@ -23,106 +19,39 @@ This is part of how [Latrel.ai](https://latrel.ai) builds tools: **Productivity 
 - **Auto-Layout:** Instantly organize messy JSON into clean hierarchies using the integrated Dagre engine.
 - **Robust Editor:** Full support for Undo/Redo, box-selection, and 24px Snap-to-Grid dragging.
 - **Custom Painter:** Recolor individual nodes to map specific services to specific teams.
-- **Export & Share:** Export your canvas to ultra-high-resolution PNGs or save the coordinate-mapped JSON.
+- **Export & Share:** Export your canvas to ultra-high-resolution PNGs, SVGs or save the coordinate-mapped JSON.
 - **Offline Capable:** Everything is auto-saved to your browser's `localStorage`.
 
----
-
-## Usage & Deployment
-
-Because this is a Single-File Web App, deployment is frictionless:
-
-1. Download or clone this repo.
-2. Open `index.html` in any web browser.
-3. Paste your JSON array into the sidebar.
-
-**To host this for your team:**
-Simply upload the `index.html` file to GitHub Pages, Vercel, Netlify, or an AWS S3 bucket. There is no `npm install`, no Webpack and no server required.
-
----
-
-## JSON Syntax Guide
-
-The engine reads a flat JSON array of Cytoscape.js-formatted objects.
-
-### 1. Basic Nodes
-
-Nodes require an `id`. You can optionally provide a `label`, a `color` and a `type`.
-
-```json
-{ 
-  "data": { 
-    "id": "api", 
-    "label": "API Gateway", 
-    "color": "#4f46e5" 
-  } 
-}
-```
-
-> **Tip:** Set `"type": "db"` to render the node as a database barrel shape.
-
-### 2. Edges (Connections)
-
-Edges require a `source` and `target` matching your node IDs.
-
-```json
-{ 
-  "data": { 
-    "source": "api", 
-    "target": "db", 
-    "label": "queries data",
-    "dashed": true 
-  } 
-}
-```
-
-### 3. Compound Nodes (Groupings / Clusters)
-
-To put nodes inside a larger bounding box (like a VPC or a Kubernetes Cluster), define the parent node, then assign the `parent` property to the child nodes.
-
-```json
-[
-  { "data": { "id": "aws", "label": "AWS Cloud" } },
-  { "data": { "id": "ec2", "label": "Web Server", "parent": "aws" } }
-]
-```
-
----
-
-## Keyboard Controls & Shortcuts
-
-| Action | Shortcut / Input |
-|---|---|
-| Box Select | `Ctrl + Click & Drag` |
-| Add to Selection | `Ctrl + Click Node` |
-| Select All | `Ctrl + A` |
-| Undo | `Ctrl + Z` |
-| Redo | `Ctrl + Y` (or `Ctrl + Shift + Z`) |
-| Pan Canvas | `Click & Drag` empty space |
-| Zoom | Scroll Wheel / Trackpad |
-
----
 
 ## Privacy Guarantee
 
-| What happens to your architecture JSON | Answer |
-|---|---|
-| Sent to a backend server | ❌ Never |
-| Stored in the cloud | ❌ Never |
-| Logged or tracked | ❌ Never |
-| Visible to Latrel | ❌ Never |
-| Stays locally in your browser | ✅ Always |
+Everything stays locally in your browser. Your architecture JSON is never sent to a backend, logged, or visible to Latrel. (Note: The app fetches open-source rendering libraries from public CDNs on load, but no user data is attached).
 
-> **Note:** The app fetches open-source rendering libraries (Cytoscape.js, Dagre, Phosphor Icons) from public CDNs on initial load, but zero user data or diagram metadata is attached to these requests.
-
----
 
 ## Known Limitations
 
-- Compound (Parent) nodes and looping edges bypass the orthogonal "Taxi" routing and fall back to smooth Bezier curves to prevent rendering bugs in the Cytoscape engine.
-- Highly nested compound nodes (more than 3 levels deep) may experience padding issues during Auto-Arrange.
+- Taxi Routing Fallbacks: Looping edges and parent-connected edges automatically revert to Bezier curves to avoid canvas engine rendering bugs.
 
----
+- Hierarchy Scale Caps: Bounding box constraints in the ELK engine may cause child nodes to overflow parent boxes if structures are nested deeper than 3 levels.
+
+- Dagre Sprawl on Compounds: The Dagre layout is optimized for flat paths and can cause layout sprawl or intersecting lines when handling complex compound nodes.
+
+- Single-Threaded Processing: All layout calculations run completely client-side, which will temporarily freeze the browser UI thread on massive datasets (500+ items).
+
+- Strict Schema Reliance: The validation loop enforces hard node checks; a single missing or mistyped node ID reference will completely halt canvas execution.
+
+## Issues Fixed
+
+- Custom Arrow & Routing Mechanics: Resolved critical directional orthogonal Taxi routing calculations and secured custom Bezier fallback overrides for complex paths.
+
+- Text Overflow Visual Bugs: Eliminated text container overflow issues within nodes.
+
+- Dynamic Node Gap Implementation: Added automatic layout spacing calculations based on edge label lengths to prevent text overlaps between layers.
+
+- Detached UI & Layout Pipelines: Extracted the core dark/light interface toggle into a separate top-bar action button, removing interface themes from the diagram rendering configurations.
+
+- Layout Engine Initialization: Cleaned script load order overhead and eliminated duplicate script inclusions that were accidentally wiping out the active elk layout definitions.
+
 
 ## About Latrel
 
@@ -132,16 +61,12 @@ Traditional BI tools treat AI as an added capability. Latrel is built around it 
 
 The platform delivers Analytical Latitude by decoupling complex reasoning from pay-per-thought constraints, enabling deep-dive investigations at scale. Its local-first hybrid architecture keeps core logic and organizational metadata private, persistent, and entirely under the user's control — independent of third-party uptime, pricing, or data policies.
 
----
 
 ## Contributing & Forking
 
 Issues and PRs are welcome. Please ensure any new features do not require a build step (keep it plain HTML/CSS/JS).
 
 > **Note on Forking:** This project uses a custom MIT license that requires UI Attribution. If you fork and host this tool, you must keep the "Powered by Latrel" link visible in the user interface.
-
----
-
 ## License
 
 MIT (with UI Attribution Requirement) © 2026 [Latrel.ai](https://latrel.ai)
